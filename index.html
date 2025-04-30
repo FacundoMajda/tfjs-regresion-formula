@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Regresión Lineal y = 2x + 6 con tf.js</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2em;
+      }
+      h1 {
+        color: #2c3e50;
+      }
+      input,
+      button {
+        margin-top: 10px;
+        font-size: 1em;
+      }
+      #status {
+        color: green;
+        font-weight: bold;
+        margin-top: 15px;
+      }
+      #resultado {
+        margin-top: 10px;
+        font-weight: bold;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  </head>
+  <body>
+    <h1>Predicción de 'y' para la fórmula y = 2x + 6</h1>
+    <p>entrenando modelo... revisar la consola para ver el progreso.</p>
+    <p id="status"></p>
+
+    <h3>predecir 'y' para un valor de 'x':</h3>
+    <input type="number" id="valorX" placeholder="ingrese valor para x" />
+    <button onclick="app.predict()">predecir 'y'</button>
+    <p id="resultado"></p>
+
+    <script>
+      const app = {
+        modelo: null,
+
+        async run() {
+          const { xs, ys } = this.loadData(); // trae los datos x, y
+          this.modelo = this.createModel(); // arma el esqueleto del modelo
+          await this.trainModel(this.modelo, xs, ys); // pone a entrenar el modelo
+          document.getElementById("status").textContent = "modelo entrenado.";
+        },
+
+        loadData() {
+          // prepara los datos para entrenar: y = 2x + 6
+          // vamos a generar 9 puntos, desde x = -6 hasta x = 2
+          const xValues = [];
+          const yValues = [];
+          for (let i = 0; i < 9; i++) {
+            const x = -6 + i;
+            xValues.push(x);
+            yValues.push(2 * x + 6); // y calculado con la formula
+          }
+
+          // tensor2d porque son como listas de numeros (aunque aca cada 'lista' tiene 1 solo numero)
+          const xs = tf.tensor2d(xValues, [xValues.length, 1]);
+          const ys = tf.tensor2d(yValues, [yValues.length, 1]);
+
+          console.log("datos para entrenar (tensores):");
+          xs.print(); // muestra x en consola
+          ys.print(); // muestra y en consola
+
+          return { xs, ys }; // devuelve los datos listos
+        },
+
+        createModel() {
+          // crea un modelo secuencial (capas en orden, una tras otra)
+          const modelo = tf.sequential();
+          // le agregamos una capa 'densa' (todas las neuronas conectadas)
+          // units: 1 -> queremos 1 sola salida (el valor de 'y')
+          // inputshape: [1] -> le decimos que la entrada sera 1 solo numero (el valor de 'x')
+          modelo.add(tf.layers.dense({ units: 1, inputShape: [1] }));
+
+          modelo.compile({
+            loss: "meanSquaredError", // como medimos que tan mal lo hace (error cuadratico medio, tipico para regresion)
+            optimizer: "sgd", // como mejora (descenso de gradiente estocastico, un optimizador simple)
+          });
+
+          console.log("modelo creado, ¡mira la estructura!");
+          modelo.summary(); // muestra un resumen del modelo
+          return modelo;
+        },
+
+        async trainModel(modelo, xs, ys) {
+          // hora de entrenar! le pasamos los datos
+          console.log("empezando el entrenamiento...");
+          await modelo.fit(xs, ys, {
+            epochs: 400, // cuantas vueltas le da a los datos
+            callbacks: {
+              onEpochEnd: (epoch, logs) => {
+                // al final de cada vuelta (epoca)
+                if ((epoch + 1) % 50 === 0) {
+                  console.log(
+                    `epoca ${epoch + 1} -> perdida: ${logs.loss.toFixed(5)}` // mientras mas chico este numero, mejor
+                  );
+                }
+              },
+            },
+          });
+          console.log("¡entrenamiento terminado!");
+        },
+
+        async predict() {
+          // funcion para predecir 'y' cuando el usuario pone una 'x'
+          const inputVal = parseFloat(document.getElementById("valorX").value); // agarra el numero del input
+          const pResultado = document.getElementById("resultado"); // donde mostramos la respuesta
+
+          if (isNaN(inputVal)) {
+            pResultado.textContent = "pon un numero valido para x, porfa.";
+            return;
+          }
+          if (!this.modelo) {
+            pResultado.textContent =
+              "espera un poquito, el modelo aun se esta entrenando.";
+            return;
+          }
+
+          // tf.tidy es como limpiar la memoria despues de usar tensores
+          tf.tidy(() => {
+            // ([1, 1] significa 1 dato con 1 caracteristica)
+            const inputTensor = tf.tensor2d([[inputVal]], [1, 1]);
+            // le pedimos al modelo que prediga
+            const prediction = this.modelo.predict(inputTensor);
+            // sacamos el numero de la prediccion del tensor
+            const predictedValue = prediction.dataSync()[0];
+            // mostramos el resultado en la pagina
+            pResultado.textContent = `si x = ${inputVal}, calculo que y es: ${predictedValue.toFixed(
+              3
+            )}`;
+            console.log(`prediccion para x=${inputVal} -> y=${predictedValue}`);
+          });
+        },
+      };
+
+      document.addEventListener("DOMContentLoaded", () => app.run());
+    </script>
+  </body>
+</html>
