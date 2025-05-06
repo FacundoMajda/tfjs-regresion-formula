@@ -26,6 +26,8 @@
         font-weight: bold;
       }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   </head>
   <body>
@@ -38,15 +40,24 @@
     <button onclick="app.predict()">predecir 'y'</button>
     <p id="resultado"></p>
 
+    <div
+      id="graphContainer"
+      style="margin-top: 20px; width: 80%; max-width: 600px"
+    >
+      <canvas id="graph"></canvas>
+    </div>
+
     <script>
       const app = {
         modelo: null,
+        lossValues: [], //se almacena la perdida
 
         async run() {
           const { xs, ys } = this.loadData(); // trae los datos x, y
           this.modelo = this.createModel(); // arma el esqueleto del modelo
           await this.trainModel(this.modelo, xs, ys); // pone a entrenar el modelo
           document.getElementById("status").textContent = "modelo entrenado.";
+          await this.renderLossChart(); //se dibuja el grafico
         },
 
         loadData() {
@@ -90,12 +101,15 @@
         },
 
         async trainModel(modelo, xs, ys) {
-          // hora de entrenar! le pasamos los datos
+          this.lossValues = [];
+
           console.log("empezando el entrenamiento...");
           await modelo.fit(xs, ys, {
             epochs: 400, // cuantas vueltas le da a los datos
             callbacks: {
               onEpochEnd: (epoch, logs) => {
+                //se guardan los valores de perdida
+                this.lossValues.push(logs.loss);
                 // al final de cada vuelta (epoca)
                 if ((epoch + 1) % 50 === 0) {
                   console.log(
@@ -106,6 +120,63 @@
             },
           });
           console.log("¡entrenamiento terminado!");
+        },
+
+        async renderLossChart() {
+          const ctx = document.getElementById("graph").getContext("2d");
+
+          // Creamos etiquetas para las épocas (1, 2, 3, ...)
+          const labels = Array.from(
+            { length: this.lossValues.length },
+            (_, i) => i + 1
+          );
+
+          // Si ya existe uno, lo destruimos
+          if (this.chart) {
+            this.chart.destroy();
+          }
+
+          // se crea un nuevo grafico
+          this.chart = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: "Loss durante el entrenamiento",
+                  data: this.lossValues,
+                  backgroundColor: "rgba(75, 192, 192, 0.2)",
+                  borderColor: "rgba(75, 192, 192, 1)",
+                  borderWidth: 2,
+                  tension: 0.1,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Error (MSE)",
+                  },
+                },
+                x: {
+                  title: {
+                    display: true,
+                    text: "Época",
+                  },
+                },
+              },
+              plugins: {
+                title: {
+                  display: true,
+                  text: "Progreso del Error Durante el Entrenamiento",
+                },
+              },
+            },
+          });
         },
 
         async predict() {
